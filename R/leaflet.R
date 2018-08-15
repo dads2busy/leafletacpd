@@ -10,8 +10,8 @@ make_crime_map <- function() {
       "Sexual Assault/Rape"
     )
   crime_years <- c(2015, 2016, 2017, 2018)
-  
-  
+
+
   if (!file.exists("map_polys_sf.RDS")) {
     # Get Polygons (CENSUS blocks)
     . <- sf::st_read(
@@ -25,7 +25,7 @@ make_crime_map <- function() {
     . <- sf::st_transform(., 4326)
     . <- rmapshaper::ms_simplify(., keep = 0.005)
     polys_sf <- .
-    
+
     # Get Points (crime locations)
     . <- sf::st_read(
       sdalr::con_db("acpd"),
@@ -57,9 +57,9 @@ make_crime_map <- function() {
       sf::st_as_sf(., coords = c("crime_longitude", "crime_latitude"))
     sf::st_crs(.) <- 4326
     pnts_sf <- .
-    
-    
-    
+
+
+
     # Get Points (restaurant locations)
     . <- sf::st_read(
       sdalr::con_db("acpd"),
@@ -69,8 +69,8 @@ make_crime_map <- function() {
     )
     . <- sf::st_as_sf(., coords = c("longitude", "latitude"))
     pnts_2_sf <- .
-    
-    
+
+
     # Join Polygons to Points (retains polygon geometry)
     . <- sf::st_join(polys_sf, pnts_sf, join = sf::st_intersects)
     cj <-
@@ -92,16 +92,16 @@ make_crime_map <- function() {
     names(.)[names(.) == "GEOID10.x"] = "GEOID10"
     names(.)[names(.) == "crime_year.x"] = "crime_year"
     polys_pnts_sf <- .
-    
-    
+
+
     # polys_pnts_sf <- merge(polys_pnts_sf, cj, by = c("GEOID10", "crime_year"), all.y = TRUE)
     # polys_pnts_sf <- polys_pnts_sf[!is.na(.$crime_latitude),]
-    
+
     # Join Points to Polygons (retains point geometry)
     pnts_polys_sf <-
       sf::st_join(pnts_sf, polys_sf, join = sf::st_intersects)
-    
-    
+
+
     # Prepare Polygon Dataset for Mapping
     . <-
       dplyr::group_by(polys_pnts_sf, GEOID10, crime_type, crime_year)
@@ -110,17 +110,17 @@ make_crime_map <- function() {
                        key = c("crime_type"),
                        value = N)
     map_polys_sf <- .
-    
+
     saveRDS(map_polys_sf, "map_polys_sf.RDS")
-    
-    
+
+
     # Prepare Point Dataset for Mapping
     . <- pnts_polys_sf[!is.na(pnts_polys_sf$GEOID10), ]
     map_pnts_sf <- .
-    
+
     saveRDS(map_pnts_sf, "map_pnts_sf.RDS")
-    
-    
+
+
     # Prepare Second Point Dataset for Mapping
     within_circle <- function(lon, lat, ctr_pnt = 402.336) {
       geosphere::distm(x = c(-77.09523, 38.8871),
@@ -134,20 +134,20 @@ make_crime_map <- function() {
                           'Bar Bao',
                           'Pamplona'), "ARI"] <- TRUE
     map_pnts_2_sf <- .
-    
+
     saveRDS(map_pnts_2_sf, "map_pnts_2_sf.RDS")
   }
-  
-  
-  
+
+
+
   # Load Data Files
   print("Loading Data Files...")
   map_polys_sf <- readRDS("map_polys_sf.RDS")
   map_pnts_sf <- readRDS("map_pnts_sf.RDS")
   map_pnts_2_sf <- readRDS("map_pnts_2_sf.RDS")
-  
-  
-  
+
+
+
   if (!file.exists("m.RDS")) {
   # Map Polygons and Points
   # color palette function
@@ -158,7 +158,7 @@ make_crime_map <- function() {
   )
   pal2 <- leaflet::colorFactor(c("gray17", "darkblue"),
                                map_pnts_2_sf$ARI)
-  
+
   # map
   print("Building Map...")
   m <- leaflet::leaflet()
@@ -168,14 +168,14 @@ make_crime_map <- function() {
   m <- leaflet::addMapPane(m, "boundaries", zIndex = 420)
   m <- leaflet::addMapPane(m, "under_places", zIndex = 405)
   m <- leaflet::addMapPane(m, "places", zIndex = 440)
-  
+
   # add polygon data layers
   print("Adding Polygon Layers...")
   for (c in crime_types) {
     for (y in crime_years) {
       plydt <-
         dplyr::filter(map_polys_sf, crime_year == y)[, c(c, "GEOID10")]
-      
+
       labels <- lapply(
         paste(
           "<strong>county:",
@@ -211,7 +211,7 @@ make_crime_map <- function() {
       )
     }
   }
-  
+
   # add point data layers
   print("Adding Point Layers...")
   for (c in crime_types) {
@@ -219,7 +219,7 @@ make_crime_map <- function() {
       pnt_dt <-
         map_pnts_sf[map_pnts_sf$crime_year == y &
                       map_pnts_sf$crime_type == c, ]
-      
+
       labels <- lapply(
         paste(
           "<strong>crime description:",
@@ -231,7 +231,7 @@ make_crime_map <- function() {
         ),
         htmltools::HTML
       )
-      
+
       m <- leaflet::addCircleMarkers(
         m,
         data = pnt_dt,
@@ -244,7 +244,7 @@ make_crime_map <- function() {
       )
     }
   }
-  
+
   # add study circle
   m <- leaflet::addCircles(
     m,
@@ -259,7 +259,7 @@ make_crime_map <- function() {
     group = "study circle",
     options = leaflet::pathOptions(pane = "under_places")
   )
-  
+
   # add second points data layer
   # m <- leaflet::addCircleMarkers(
   #   m,
@@ -272,7 +272,7 @@ make_crime_map <- function() {
   #   group = "restaurants",
   #   options = leaflet::pathOptions(pane = "places")
   # )
-  
+
   print("Adding Marker Layers...")
   ari_tf <- map_pnts_2_sf$ARI
   getColor <- function(aritf) {
@@ -284,11 +284,11 @@ make_crime_map <- function() {
       }
     })
   }
-  
+
   icons <- leaflet::awesomeIcons(icon = 'fa-cutlery',
                                  library = 'fa',
                                  markerColor = getColor(ari_tf))
-  
+
   m <- leaflet::addAwesomeMarkers(
     m,
     data = map_pnts_2_sf,
@@ -297,7 +297,7 @@ make_crime_map <- function() {
     label = ~ as.character(trade_name),
     options = leaflet::pathOptions(pane = "places")
   )
-  
+
   # make group names
   if (exists("cys"))
     rm(cys)
@@ -310,7 +310,7 @@ make_crime_map <- function() {
         cys <- cy
     }
   }
-  
+
   # add Layer Control
   print("Building Controls...")
   m <- leaflet::addLayersControl(
@@ -319,9 +319,9 @@ make_crime_map <- function() {
     overlayGroups = c("restaurants", "study circle"),
     options = leaflet::layersControlOptions(collapsed = TRUE)
   )
-  
+
   m <- leaflet::showGroup(m, cys[1])
-  
+
   # add Legend
   m <- leaflet::addLegend(
     m,
@@ -333,8 +333,9 @@ make_crime_map <- function() {
   )
   saveRDS(m, "m.RDS")
   }
-  
+
   m <- readRDS("m.RDS")
   print("Launching Map...")
-  m
+
+  htmlwidgets::saveWidget(m, "m.html", selfcontained = F, knitrOptions = list(output=html_fragment))
 }
